@@ -25,6 +25,7 @@
 #include "ui/painter.h"
 #include "ui/qt_object_factory.h"
 #include "ui/integration.h"
+#include "ui/screen_reader_mode.h"
 #include "styles/style_widgets.h"
 #include "styles/palette.h"
 
@@ -2155,12 +2156,25 @@ bool InputField::viewportEventInner(QEvent *e) {
 	return _inner->QTextEdit::viewportEvent(e);
 }
 
-void InputField::updatePalette() {
+void InputField::applyPaletteColors(bool onlyIfChanged) {
+	const auto text = _st.textFg->c;
+	const auto highlight = st::msgInBgSelected->c;
+	const auto highlighted = st::historyTextInFgSelected->c;
 	auto p = _inner->palette();
-	p.setColor(QPalette::Text, _st.textFg->c);
-	p.setColor(QPalette::Highlight, st::msgInBgSelected->c);
-	p.setColor(QPalette::HighlightedText, st::historyTextInFgSelected->c);
+	if (onlyIfChanged
+		&& p.color(QPalette::Text) == text
+		&& p.color(QPalette::Highlight) == highlight
+		&& p.color(QPalette::HighlightedText) == highlighted) {
+		return;
+	}
+	p.setColor(QPalette::Text, text);
+	p.setColor(QPalette::Highlight, highlight);
+	p.setColor(QPalette::HighlightedText, highlighted);
 	_inner->setPalette(p);
+}
+
+void InputField::updatePalette() {
+	applyPaletteColors(false);
 
 	_defaultCharFormat.merge(PrepareTagFormat(
 		_st,
@@ -2327,6 +2341,7 @@ void InputField::customEmojiRepaint() {
 }
 
 void InputField::paintEventInner(QPaintEvent *e) {
+	applyPaletteColors(true);
 	_customEmojiRepaintScheduled = false;
 	paintQuotes(e);
 	_inner->QTextEdit::paintEvent(e);
@@ -2928,9 +2943,10 @@ void InputField::paintEvent(QPaintEvent *e) {
 		p.setClipRect(r);
 
 		auto placeholderTop = anim::interpolate(0, _st.placeholderShift, placeholderShiftDegree);
+		auto placeholderLeft = anim::interpolate(0, _st.placeholderShiftLeft, placeholderShiftDegree);
 
 		QRect r(rect().marginsRemoved(margins));
-		r.moveTop(r.top() + placeholderTop);
+		r.translate(placeholderLeft, placeholderTop);
 		if (style::RightToLeft()) r.moveLeft(width() - r.left() - r.width());
 
 		auto placeholderScale = 1. - (1. - _st.placeholderScale) * placeholderShiftDegree;
@@ -4267,6 +4283,8 @@ void InputField::setTextWithTags(
 	_insertedTagsAreFromMime = false;
 	_realInsertPosition = 0;
 	_realCharsAdded = prepared.text.size();
+	// The whole text is replaced, so old block formats (quotes) must not survive.
+	_insertedTagsReplace = true;
 	const auto document = _inner->document();
 	auto cursor = QTextCursor(document);
 	if (historyAction == HistoryAction::Clear) {
@@ -4288,6 +4306,7 @@ void InputField::setTextWithTags(
 	if (historyAction == HistoryAction::Clear) {
 		document->setUndoRedoEnabled(true);
 	}
+	_insertedTagsReplace = false;
 	_insertedTags.clear();
 	_realInsertPosition = -1;
 	finishAnimating();
@@ -4523,7 +4542,10 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 			e->ignore();
 		} else {
 			const auto forward = (key == Qt::Key_Tab) && !shift;
-			auto request = TabbedRequest{ .backward = !forward };
+			auto request = TabbedRequest{
+				.backward = !forward,
+				.defaultOrder = ScreenReaderModeActive(),
+			};
 			_tabbed.fire(&request);
 			if (!request.handled && !focusNextPrevChild(forward)) {
 				e->ignore();
