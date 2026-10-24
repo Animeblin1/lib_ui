@@ -74,4 +74,50 @@ bool isSmoothScroll() {
 	return smoothScroll;
 }
 
+int caretSpeed = 50;
+bool caretBlink = true;
+int blinkMs = 500;
+bool caretAccent = false;
+int scrollSmoothSpeed = 50;
+
+void setCaretSpeed(int val) {
+	caretSpeed = val;
+}
+
+int getCaretSpeed() {
+	return caretSpeed;
+}
+
+void setCaretBlink(bool val) {
+	caretBlink = val;
+}
+
+bool isCaretBlink() {
+	return caretBlink;
+}
+
+void setBlinkMs(int val) {
+	blinkMs = val;
+}
+
+int getBlinkMs() {
+	return blinkMs;
+}
+
+void setCaretAccent(bool val) {
+	caretAccent = val;
+}
+
+bool isCaretAccent() {
+	return caretAccent;
+}
+
+void setScrollSmoothSpeed(int val) {
+	scrollSmoothSpeed = val;
+}
+
+int getScrollSmoothSpeed() {
+	return scrollSmoothSpeed;
+}
+
 }

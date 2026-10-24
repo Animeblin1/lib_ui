@@ -580,7 +580,8 @@ void ElasticScroll::smoothWheelTick() {
 		_smoothWheelTimer.cancel();
 		return;
 	}
-	const auto k = 1. - std::exp(-dt / 90.);
+	const auto tau = 20. + (100. - AyuUiSettings::getScrollSmoothSpeed()) * 2.4;
+	const auto k = 1. - std::exp(-dt / tau);
 	_smoothCurrent += diff * k;
 	tryScrollTo(int(std::lround(_smoothCurrent)));
 	if (_state.visibleFrom == int(std::lround(_smoothCurrent))) {

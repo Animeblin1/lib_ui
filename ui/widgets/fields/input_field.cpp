@@ -15,6 +15,8 @@
 #include "emoji_suggestions_helper.h"
 #include "ui/text/text.h"
 #include "ayu/ayu_ui_settings.h"
+#include "ayu/ayu_ui_settings.h"
+#include "ayu/ayu_ui_settings.h"
 #include "ui/text/text_html_tags.h"
 #include "ui/basic_click_handlers.h"
 #include "ui/text/text_renderer.h" // kQuoteCollapsedLines
@@ -31,6 +33,10 @@
 #include "styles/palette.h"
 
 #include <QtCore/QtMath>
+#include <QtCore/QDateTime>
+#include <QtCore/QTimer>
+#include <QtCore/QDateTime>
+#include <QtCore/QTimer>
 #include <QtCore/QDateTime>
 #include <QtCore/QTimer>
 #include <QtCore/QMimeData>
@@ -1596,7 +1602,7 @@ protected:
 	void paintEvent(QPaintEvent *) override {
 		QPainter p(this);
 		p.setPen(Qt::NoPen);
-		p.setBrush(palette().color(QPalette::Text));
+		p.setBrush(_color);
 		p.setOpacity(_blink ? 1.0 : 0.15);
 		p.drawRoundedRect(rect(), 1, 1);
 	}
@@ -1609,7 +1615,15 @@ public:
 		}
 	}
 
+	void setColor(QColor color) {
+		if (_color != color) {
+			_color = color;
+			update();
+		}
+	}
+
 private:
+	QColor _color = Qt::transparent;
 	bool _blink = true;
 };
 class InputField::Inner final : public QTextEdit {
@@ -1661,11 +1675,19 @@ public:
 		}
 		const auto r = cursorRect();
 		const auto now = QDateTime::currentMSecsSinceEpoch();
-		if (now - _lastMove < 450) {
-			_caret->setBlink(true);
+		if (AyuUiSettings::isCaretBlink()) {
+			if (now - _lastMove < 450) {
+				_caret->setBlink(true);
+			} else {
+				const auto half = AyuUiSettings::getBlinkMs();
+				_caret->setBlink(((now - _lastMove) % (half * 2)) < half);
+			}
 		} else {
-			_caret->setBlink(((now - _lastMove) % 1000) < 500);
+			_caret->setBlink(true);
 		}
+		_caret->setColor(AyuUiSettings::isCaretAccent()
+			? st::windowActiveTextFg->c
+			: palette().color(QPalette::Text));
 		const auto target = double(r.x());
 		if (!_started || _caretX < 0) {
 			_caretX = target;

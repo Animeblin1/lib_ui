@@ -30,4 +30,15 @@ bool isSmoothCaret();
 void setSmoothScroll(bool val);
 bool isSmoothScroll();
 
+void setCaretSpeed(int val);
+int getCaretSpeed();
+void setCaretBlink(bool val);
+bool isCaretBlink();
+void setBlinkMs(int val);
+int getBlinkMs();
+void setCaretAccent(bool val);
+bool isCaretAccent();
+void setScrollSmoothSpeed(int val);
+int getScrollSmoothSpeed();
+
 }
