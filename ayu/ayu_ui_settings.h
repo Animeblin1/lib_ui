@@ -42,5 +42,7 @@ void setCaretCustomColor(unsigned int rgb);
 unsigned int getCaretCustomColor();
 void setScrollSmoothSpeed(int val);
 int getScrollSmoothSpeed();
+void setWheelScrollStep(int percent);
+int getWheelScrollStep();
 
 }

@@ -131,4 +131,15 @@ int getScrollSmoothSpeed() {
 	return scrollSmoothSpeed;
 }
 
+// Wheel notch distance as a percentage of the native step.
+int wheelScrollStep = 100;
+
+void setWheelScrollStep(int percent) {
+	wheelScrollStep = percent;
+}
+
+int getWheelScrollStep() {
+	return wheelScrollStep;
+}
+
 }

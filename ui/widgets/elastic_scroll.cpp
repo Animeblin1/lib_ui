@@ -564,7 +564,8 @@ void ElasticScroll::startSmoothWheel(double delta) {
 		_smoothActive = true;
 		_smoothWheelTimer.callEach(16);
 	}
-	_smoothTarget += delta;
+	_smoothTarget += delta
+		* (AyuUiSettings::getWheelScrollStep() / 100.);
 	_smoothLast = now;
 	_smoothStall = 0;
 }
