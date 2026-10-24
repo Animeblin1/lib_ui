@@ -33,10 +33,7 @@
 #include "styles/palette.h"
 
 #include <QtCore/QtMath>
-#include <QtCore/QDateTime>
-#include <QtCore/QTimer>
-#include <QtCore/QDateTime>
-#include <QtCore/QTimer>
+#include <cmath>
 #include <QtCore/QDateTime>
 #include <QtCore/QTimer>
 #include <QtCore/QMimeData>
@@ -1769,6 +1766,7 @@ protected:
 	double _caretX = -1;
 	qint64 _lastMove = 0;
 	qint64 _lastTick = 0;
+	bool _started = false;
 	not_null<InputField*> outer() const {
 		return static_cast<InputField*>(parentWidget());
 	}

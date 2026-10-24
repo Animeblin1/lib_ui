@@ -12,6 +12,7 @@
 #include "base/qt/qt_common_adapters.h"
 #include "styles/style_widgets.h"
 
+#include <cmath>
 #include <QtGui/QWindow>
 #include <QtCore/QtMath>
 #include <QtWidgets/QApplication>

@@ -5,6 +5,7 @@
 // https://github.com/desktop-app/legal/blob/master/LEGAL
 //
 #include "ui/widgets/fields/masked_input_field.h"
+#include <cmath>
 #include <QtCore/QDateTime>
 #include <QtCore/QTimer>
 #include "ayu/ayu_ui_settings.h"
@@ -18,6 +19,7 @@
 
 #include <QtWidgets/QCommonStyle>
 #include <QtWidgets/QApplication>
+#include <QtWidgets/QProxyStyle>
 #include <QtGui/QClipboard>
 
 namespace Ui {
@@ -56,6 +58,23 @@ private:
 };
 
 InputStyle *InputStyle::_instance = nullptr;
+
+// AyuGram: QLineEdit takes the native caret width from the style on every
+// paint, so the only reliable way to hide it is a per-widget style reporting
+// no cursor width while the smooth caret setting is on.
+class AyuLineEditStyle final : public QProxyStyle {
+public:
+	int pixelMetric(
+			PixelMetric metric,
+			const QStyleOption *option = nullptr,
+			const QWidget *widget = nullptr) const override {
+		if (metric == PM_TextCursorWidth && AyuUiSettings::isSmoothCaret()) {
+			return 0;
+		}
+		return QProxyStyle::pixelMetric(metric, option, widget);
+	}
+
+};
 
 } // namespace
 
@@ -107,17 +126,11 @@ void MaskedInputField::ayuCaretMoved() {
 void MaskedInputField::ayuCaretTick() {
 	const auto feature = AyuUiSettings::isSmoothCaret();
 	if (!feature) {
-		if (cursorWidth() == 0) {
-			setCursorWidth(1);
-		}
 		if (_ayu && _ayu->isVisible()) {
 			_ayu->hide();
 		}
 		_ayuStarted = false;
 		return;
-	}
-	if (cursorWidth() != 0) {
-		setCursorWidth(0);
 	}
 	const auto active = hasFocus() && !hasSelectedText();
 	if (!active) {
@@ -197,7 +210,7 @@ MaskedInputField::MaskedInputField(
 	}, lifetime());
 	updatePalette();
 
-	setCursorWidth(0); // AyuGram: the native caret is ours now
+	setStyle(new AyuLineEditStyle()); // AyuGram: the native caret is ours now
 	_ayu = new AyuCaretOverlay(this);
 	_ayu->hide();
 	_ayuTimer = new QTimer(this);

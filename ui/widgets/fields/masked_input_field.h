@@ -20,7 +20,6 @@ namespace Ui {
 
 class PopupMenu;
 
-class QTimer;
 class AyuCaretOverlay;
 
 class MaskedInputField : public RpWidgetBase<QLineEdit> {
