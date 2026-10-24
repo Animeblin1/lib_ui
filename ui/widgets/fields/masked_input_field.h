@@ -134,7 +134,9 @@ private:
 	QTimer *_ayuTimer = nullptr;
 	double _ayuX = -1;
 	qint64 _ayuLastMove = 0;
-	qint64 _ayuLastTick = 0;
+	double _ayuAnimFrom = 0;
+	double _ayuAnimTo = 0;
+	qint64 _ayuAnimStart = 0;
 	bool _ayuStarted = false;
 
 	void ayuCaretMoved();

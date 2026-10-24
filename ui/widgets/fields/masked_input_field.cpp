@@ -161,22 +161,26 @@ void MaskedInputField::ayuCaretTick() {
 	const auto target = double(r.x());
 	if (!_ayuStarted || _ayuX < 0) {
 		_ayuX = target;
+		_ayuAnimFrom = target;
+		_ayuAnimTo = target;
+		_ayuAnimStart = now;
 		_ayuStarted = true;
-		_ayuLastTick = now;
-		return;
+	} else if (target != _ayuAnimTo) {
+		// Claude-style: every cursor move starts a fresh short
+		// ease-out glide from the current animated position, so
+		// the caret keeps up with the letters - no lag tail and
+		// no overshoot, it settles exactly on the character.
+		_ayuAnimFrom = _ayuX;
+		_ayuAnimTo = target;
+		_ayuAnimStart = now;
 	}
-	auto dt = double(now - _ayuLastTick);
-	_ayuLastTick = now;
-	if (dt <= 0) {
-		dt = 16.;
-	}
-	const auto tau = (100. - AyuUiSettings::getCaretSpeed()) * 2.;
-	const auto k = (tau > 0.) ? (1. - std::exp(-dt / tau)) : 1.;
-	const auto dx = target - _ayuX;
-	if (qAbs(dx) < 1.5) {
-		_ayuX = target;
+	const auto dur = 320. - (2.6 * AyuUiSettings::getCaretSpeed());
+	const auto t = double(now - _ayuAnimStart);
+	if (t >= dur) {
+		_ayuX = _ayuAnimTo;
 	} else {
-		_ayuX += dx * k;
+		const auto p = 1. - std::pow(1. - (t / dur), 3.);
+		_ayuX = _ayuAnimFrom + (_ayuAnimTo - _ayuAnimFrom) * p;
 	}
 	_ayu->setGeometry(QRect(
 		int(_ayuX),

@@ -1688,21 +1688,26 @@ public:
 		const auto target = double(r.x());
 		if (!_started || _caretX < 0) {
 			_caretX = target;
+			_animFrom = target;
+			_animTo = target;
+			_animStart = now;
 			_started = true;
-		_lastTick = now;
+		} else if (target != _animTo) {
+			// Claude-style: every cursor move starts a fresh short
+			// ease-out glide from the current animated position, so
+			// the caret keeps up with the letters - no lag tail and
+			// no overshoot, it settles exactly on the character.
+			_animFrom = _caretX;
+			_animTo = target;
+			_animStart = now;
 		}
-		const auto dx = target - _caretX;
-		if (qAbs(dx) < 1.5) {
-			_caretX = target;
+		const auto dur = 320. - (2.6 * AyuUiSettings::getCaretSpeed());
+		const auto t = double(now - _animStart);
+		if (t >= dur) {
+			_caretX = _animTo;
 		} else {
-auto dt = double(now - _lastTick);
-			_lastTick = now;
-			if (dt <= 0) {
-				dt = 16.;
-			}
-			const auto tau = (100. - AyuUiSettings::getCaretSpeed()) * 2.;
-			const auto k = (tau > 0.) ? (1. - std::exp(-dt / tau)) : 1.;
-			_caretX += dx * k;
+			const auto p = 1. - std::pow(1. - (t / dur), 3.);
+			_caretX = _animFrom + (_animTo - _animFrom) * p;
 		}
 		_caret->setGeometry(QRect(
 			int(_caretX),
@@ -1765,7 +1770,9 @@ protected:
 	QTimer _caretTimer;
 	double _caretX = -1;
 	qint64 _lastMove = 0;
-	qint64 _lastTick = 0;
+	double _animFrom = 0;
+	double _animTo = 0;
+	qint64 _animStart = 0;
 	bool _started = false;
 	not_null<InputField*> outer() const {
 		return static_cast<InputField*>(parentWidget());

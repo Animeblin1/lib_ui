@@ -548,16 +548,28 @@ bool ElasticScroll::overscrollCollapsing() const {
 }
 
 void ElasticScroll::startSmoothWheel(double delta) {
+	const auto now = crl::now();
 	if (!_smoothActive) {
 		_smoothCurrent = _state.visibleFrom;
-		_smoothTarget = _state.visibleFrom;
-		_smoothActive = true;
+		_smoothFrom = _smoothCurrent;
+		_smoothTarget = _smoothCurrent + delta;
+		_smoothStart = now;
+		_smoothLast = now;
 		_smoothStall = 0;
-	}
-	_smoothTarget += delta;
-	if (!_smoothWheelTimer.isActive()) {
-		_smoothLast = crl::now();
+		_smoothActive = true;
 		_smoothWheelTimer.callEach(16);
+		return;
+	}
+	const auto newTo = _smoothTarget + delta;
+	if (base::OppositeSigns(newTo - _smoothCurrent, _smoothTarget - _smoothCurrent)) {
+		// Direction reversed mid-glide: start a fresh glide from
+		// where the view actually is.
+		_smoothFrom = _smoothCurrent;
+		_smoothTarget = newTo;
+		_smoothStart = now;
+	} else {
+		// Same direction: extend the glide, keep the clock running.
+		_smoothTarget = newTo;
 	}
 }
 
@@ -567,27 +579,26 @@ void ElasticScroll::smoothWheelTick() {
 		return;
 	}
 	const auto now = crl::now();
-	auto dt = double(now - _smoothLast);
-	_smoothLast = now;
-	if (dt <= 0) {
-		dt = 16.;
-	}
-	const auto diff = _smoothTarget - _smoothCurrent;
-	if (std::abs(diff) < 0.75) {
+	const auto dur = 60. + (100. - AyuUiSettings::getScrollSmoothSpeed()) * 2.4;
+	const auto t = double(now - _smoothStart);
+	if (t >= dur) {
 		tryScrollTo(int(std::lround(_smoothTarget)));
 		_smoothTarget = _state.visibleFrom;
 		_smoothCurrent = _smoothTarget;
+		_smoothFrom = _smoothCurrent;
 		_smoothActive = false;
 		_smoothWheelTimer.cancel();
 		return;
 	}
-	const auto tau = 20. + (100. - AyuUiSettings::getScrollSmoothSpeed()) * 2.4;
-	const auto k = 1. - std::exp(-dt / tau);
-	_smoothCurrent += diff * k;
+	const auto p = 1. - std::pow(1. - (t / dur), 3.);
+	_smoothCurrent = _smoothFrom + (_smoothTarget - _smoothFrom) * p;
 	tryScrollTo(int(std::lround(_smoothCurrent)));
 	if (_state.visibleFrom == int(std::lround(_smoothCurrent))) {
 		if (++_smoothStall > 3) {
-			_smoothTarget = _smoothCurrent;
+			// Clamped by the scroll range: settle at the real edge.
+			_smoothFrom = _state.visibleFrom;
+			_smoothCurrent = _smoothFrom;
+			_smoothTarget = _smoothFrom;
 			_smoothActive = false;
 			_smoothWheelTimer.cancel();
 		}
