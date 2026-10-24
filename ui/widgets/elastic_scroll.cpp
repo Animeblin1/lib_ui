@@ -548,6 +548,9 @@ bool ElasticScroll::overscrollCollapsing() const {
 }
 
 void ElasticScroll::startSmoothWheel(double delta) {
+	if (!delta) {
+		return;
+	}
 	// Ayu: every wheel event starts a fresh short glide from the current
 	// position - chaining them reads as fast *and* smooth (like Telegram),
 	// with no easing-clock jumps when events stream in mid-glide.
