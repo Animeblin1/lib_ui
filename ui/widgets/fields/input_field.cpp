@@ -1692,12 +1692,20 @@ public:
 		if (!_started || _caretX < 0) {
 			_caretX = target;
 			_started = true;
+		_lastTick = now;
 		}
 		const auto dx = target - _caretX;
 		if (qAbs(dx) < 1.5) {
 			_caretX = target;
 		} else {
-			_caretX += dx * 0.5;
+auto dt = double(now - _lastTick);
+			_lastTick = now;
+			if (dt <= 0) {
+				dt = 16.;
+			}
+			const auto tau = (100. - AyuUiSettings::getCaretSpeed()) * 2.;
+			const auto k = (tau > 0.) ? (1. - std::exp(-dt / tau)) : 1.;
+			_caretX += dx * k;
 		}
 		_caret->setGeometry(QRect(
 			int(_caretX),
@@ -1760,6 +1768,7 @@ protected:
 	QTimer _caretTimer;
 	double _caretX = -1;
 	qint64 _lastMove = 0;
+	qint64 _lastTick = 0;
 	not_null<InputField*> outer() const {
 		return static_cast<InputField*>(parentWidget());
 	}
