@@ -38,6 +38,8 @@ void setBlinkMs(int val);
 int getBlinkMs();
 void setCaretAccent(bool val);
 bool isCaretAccent();
+void setCaretCustomColor(unsigned int rgb);
+unsigned int getCaretCustomColor();
 void setScrollSmoothSpeed(int val);
 int getScrollSmoothSpeed();
 

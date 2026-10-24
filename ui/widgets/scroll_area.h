@@ -234,6 +234,9 @@ private:
 	bool touchScroll(const QPoint &delta);
 	void touchScrollUpdated(const QPoint &screenPos);
 
+	void startSmoothWheel(double delta);
+	void smoothWheelTick();
+
 	void touchResetSpeed();
 	void touchUpdateSpeed();
 	void touchDeaccelerate(int32 elapsed);
@@ -269,6 +272,15 @@ private:
 	ScrollDirectionLock _wheelDirectionLock;
 	bool _wheelDirectionLocked = false;
 	bool _widgetAcceptsTouch = false;
+
+	// Ayu: smooth scrolling of the classic mouse wheel.
+	base::Timer _smoothWheelTimer;
+	double _smoothCurrent = 0;
+	double _smoothTarget = 0;
+	double _smoothFrom = 0;
+	crl::time _smoothStart = 0;
+	crl::time _smoothLast = 0;
+	bool _smoothActive = false;
 
 	object_ptr<QWidget> _widget = { nullptr };
 

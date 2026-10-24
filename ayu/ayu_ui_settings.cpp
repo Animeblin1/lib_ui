@@ -112,6 +112,17 @@ bool isCaretAccent() {
 	return caretAccent;
 }
 
+// 0 = automatic (accent toggle / palette), otherwise 0xRRGGBB.
+unsigned int caretCustomColor = 0;
+
+void setCaretCustomColor(unsigned int rgb) {
+	caretCustomColor = rgb;
+}
+
+unsigned int getCaretCustomColor() {
+	return caretCustomColor;
+}
+
 void setScrollSmoothSpeed(int val) {
 	scrollSmoothSpeed = val;
 }

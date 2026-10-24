@@ -8,9 +8,12 @@
 
 #include "ui/painter.h"
 #include "ui/ui_utility.h"
+#include "ayu/ayu_ui_settings.h"
+#include "base/algorithm.h"
 #include "base/qt/qt_common_adapters.h"
 #include "base/debug_log.h"
 
+#include <cmath>
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QApplication>
 #include <QtGui/QGuiApplication>
@@ -414,7 +417,8 @@ ScrollArea::ScrollArea(
 , _verticalBar(this, true, &_st)
 , _topShadow(this, &_st)
 , _bottomShadow(this, &_st)
-, _touchEnabled(handleTouch) {
+, _touchEnabled(handleTouch)
+, _smoothWheelTimer([=] { smoothWheelTick(); }) {
 	setLayoutDirection(style::LayoutDirection());
 	setFocusPolicy(Qt::NoFocus);
 
@@ -649,8 +653,75 @@ bool ScrollArea::viewportEvent(QEvent *e) {
 						phase);
 			}
 		}
+		// Ayu: glide the classic mouse wheel smoothly in every list.
+		if (AyuUiSettings::isSmoothScroll()
+			&& ev->phase() == Qt::NoScrollPhase) {
+			const auto pixels = ScrollDelta(ev);
+			const auto d = -double(pixels.y());
+			if (d != 0.) {
+				startSmoothWheel(d);
+				return true;
+			}
+		}
 	}
 	return QScrollArea::viewportEvent(e);
+}
+
+void ScrollArea::startSmoothWheel(double delta) {
+	const auto now = crl::now();
+	if (!_smoothActive) {
+		_smoothCurrent = verticalScrollBar()->value();
+		_smoothFrom = _smoothCurrent;
+		_smoothTarget = _smoothCurrent + delta;
+		_smoothStart = now;
+		_smoothLast = now;
+		_smoothActive = true;
+		_smoothWheelTimer.callEach(16);
+		return;
+	}
+	const auto newTo = _smoothTarget + delta;
+	if (base::OppositeSigns(newTo - _smoothCurrent, _smoothTarget - _smoothCurrent)) {
+		// Direction reversed mid-glide: start a fresh glide from
+		// where the view actually is.
+		_smoothFrom = _smoothCurrent;
+		_smoothTarget = newTo;
+		_smoothStart = now;
+	} else {
+		// Same direction: extend the glide, keep the clock running.
+		_smoothTarget = newTo;
+	}
+}
+
+void ScrollArea::smoothWheelTick() {
+	if (!_smoothActive) {
+		_smoothWheelTimer.cancel();
+		return;
+	}
+	const auto now = crl::now();
+	const auto dur = 60. + (100. - AyuUiSettings::getScrollSmoothSpeed()) * 2.4;
+	const auto t = double(now - _smoothStart);
+	if (t >= dur) {
+		verticalScrollBar()->setValue(int(std::lround(_smoothTarget)));
+		_smoothCurrent = _smoothTarget;
+		_smoothFrom = _smoothTarget;
+		_smoothActive = false;
+		_smoothWheelTimer.cancel();
+		return;
+	}
+	const auto p = 1. - std::pow(1. - (t / dur), 3.);
+	_smoothCurrent = _smoothFrom + (_smoothTarget - _smoothFrom) * p;
+	verticalScrollBar()->setValue(int(std::lround(_smoothCurrent)));
+	if (verticalScrollBar()->value() == int(std::lround(_smoothCurrent))) {
+		// If the range clamps us, settle at the real edge early.
+		if (_smoothCurrent >= verticalScrollBar()->maximum()
+			|| _smoothCurrent <= verticalScrollBar()->minimum()) {
+			_smoothCurrent = verticalScrollBar()->value();
+			_smoothFrom = _smoothCurrent;
+			_smoothTarget = _smoothCurrent;
+			_smoothActive = false;
+			_smoothWheelTimer.cancel();
+		}
+	}
 }
 
 bool ScrollArea::filterOutTouchEvent(QEvent *e) {

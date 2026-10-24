@@ -155,7 +155,10 @@ void MaskedInputField::ayuCaretTick() {
 	} else {
 		_ayu->setBlink(true);
 	}
-	_ayu->setColor(AyuUiSettings::isCaretAccent()
+	const auto customRgb = AyuUiSettings::getCaretCustomColor();
+	_ayu->setColor(customRgb
+		? QColor::fromRgb(customRgb)
+		: AyuUiSettings::isCaretAccent()
 		? st::windowActiveTextFg->c
 		: palette().color(QPalette::Text));
 	const auto target = double(r.x());

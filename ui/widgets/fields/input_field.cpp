@@ -1682,7 +1682,10 @@ public:
 		} else {
 			_caret->setBlink(true);
 		}
-		_caret->setColor(AyuUiSettings::isCaretAccent()
+		const auto customRgb = AyuUiSettings::getCaretCustomColor();
+		_caret->setColor(customRgb
+			? QColor::fromRgb(customRgb)
+			: AyuUiSettings::isCaretAccent()
 			? st::windowActiveTextFg->c
 			: palette().color(QPalette::Text));
 		const auto target = double(r.x());
