@@ -668,28 +668,18 @@ bool ScrollArea::viewportEvent(QEvent *e) {
 }
 
 void ScrollArea::startSmoothWheel(double delta) {
+	// Ayu: every wheel event starts a fresh short glide from the current
+	// position - chaining them reads as fast *and* smooth (like Telegram),
+	// with no easing-clock jumps when events stream in mid-glide.
 	const auto now = crl::now();
-	if (!_smoothActive) {
-		_smoothCurrent = verticalScrollBar()->value();
-		_smoothFrom = _smoothCurrent;
-		_smoothTarget = _smoothCurrent + delta;
-		_smoothStart = now;
-		_smoothLast = now;
-		_smoothActive = true;
-		_smoothWheelTimer.callEach(16);
-		return;
-	}
-	const auto newTo = _smoothTarget + delta;
-	if (base::OppositeSigns(newTo - _smoothCurrent, _smoothTarget - _smoothCurrent)) {
-		// Direction reversed mid-glide: start a fresh glide from
-		// where the view actually is.
-		_smoothFrom = _smoothCurrent;
-		_smoothTarget = newTo;
-		_smoothStart = now;
-	} else {
-		// Same direction: extend the glide, keep the clock running.
-		_smoothTarget = newTo;
-	}
+	_smoothFrom = _smoothActive
+		? _smoothCurrent
+		: verticalScrollBar()->value();
+	_smoothTarget = _smoothFrom + delta;
+	_smoothStart = now;
+	_smoothLast = now;
+	_smoothActive = true;
+	_smoothWheelTimer.callEach(16);
 }
 
 void ScrollArea::smoothWheelTick() {
@@ -698,7 +688,8 @@ void ScrollArea::smoothWheelTick() {
 		return;
 	}
 	const auto now = crl::now();
-	const auto dur = 60. + (100. - AyuUiSettings::getScrollSmoothSpeed()) * 2.4;
+	// Telegram-like pacing: quick glide, crisp finish.
+	const auto dur = 40. + (100. - AyuUiSettings::getScrollSmoothSpeed()) * 1.8;
 	const auto t = double(now - _smoothStart);
 	if (t >= dur) {
 		verticalScrollBar()->setValue(int(std::lround(_smoothTarget)));
