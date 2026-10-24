@@ -264,6 +264,8 @@ private:
 	void enterEventHook(QEnterEvent *e) override;
 	void leaveEventHook(QEvent *e) override;
 	bool handleWheelEvent(not_null<QWheelEvent*> e, bool touch = false);
+	void startSmoothWheel(double delta);
+	void smoothWheelTick();
 	bool requestBottomContent(int delta);
 	void handleTouchEvent(QTouchEvent *e);
 
@@ -326,6 +328,12 @@ private:
 	ScrollState _state;
 
 	base::Timer _touchTimer;
+	base::Timer _smoothWheelTimer;
+	double _smoothCurrent = 0;
+	double _smoothTarget = 0;
+	crl::time _smoothLast = 0;
+	int _smoothStall = 0;
+	bool _smoothActive = false;
 	base::Timer _touchScrollTimer;
 	QPoint _touchStart;
 	QPoint _touchPreviousPosition;

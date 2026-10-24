@@ -5,6 +5,7 @@
 // https://github.com/desktop-app/legal/blob/master/LEGAL
 //
 #include "ui/widgets/elastic_scroll.h"
+#include "ayu/ayu_ui_settings.h"
 
 #include "ui/painter.h"
 #include "ui/ui_utility.h"
@@ -414,6 +415,7 @@ ElasticScroll::ElasticScroll(
 , _bar(std::make_unique<ElasticScrollBar>(this, _st, orientation))
 , _touchTimer([=] { _touchRightButton = true; })
 , _touchScrollTimer([=] { touchScrollTimer(); })
+	, _smoothWheelTimer([=] { smoothWheelTick(); })
 , _vertical(orientation == Qt::Vertical)
 , _position(Position{ 0, 0 })
 , _movement(Movement::None) {
@@ -544,6 +546,53 @@ bool ElasticScroll::overscrollCollapsing() const {
 	return (stretch != 0) && base::OppositeSigns(stretch, _overscroll);
 }
 
+void ElasticScroll::startSmoothWheel(double delta) {
+	if (!_smoothActive) {
+		_smoothCurrent = _state.visibleFrom;
+		_smoothTarget = _state.visibleFrom;
+		_smoothActive = true;
+		_smoothStall = 0;
+	}
+	_smoothTarget += delta;
+	if (!_smoothWheelTimer.isActive()) {
+		_smoothLast = crl::now();
+		_smoothWheelTimer.callEach(16);
+	}
+}
+
+void ElasticScroll::smoothWheelTick() {
+	if (!_smoothActive) {
+		_smoothWheelTimer.cancel();
+		return;
+	}
+	const auto now = crl::now();
+	auto dt = double(now - _smoothLast);
+	_smoothLast = now;
+	if (dt <= 0) {
+		dt = 16.;
+	}
+	const auto diff = _smoothTarget - _smoothCurrent;
+	if (std::abs(diff) < 0.75) {
+		tryScrollTo(int(std::lround(_smoothTarget)));
+		_smoothTarget = _state.visibleFrom;
+		_smoothCurrent = _smoothTarget;
+		_smoothActive = false;
+		_smoothWheelTimer.cancel();
+		return;
+	}
+	const auto k = 1. - std::exp(-dt / 90.);
+	_smoothCurrent += diff * k;
+	tryScrollTo(int(std::lround(_smoothCurrent)));
+	if (_state.visibleFrom == int(std::lround(_smoothCurrent))) {
+		if (++_smoothStall > 3) {
+			_smoothTarget = _smoothCurrent;
+			_smoothActive = false;
+			_smoothWheelTimer.cancel();
+		}
+	} else {
+		_smoothStall = 0;
+	}
+}
 void ElasticScroll::trackWheelVelocity(
 		Qt::ScrollPhase phase,
 		int delta,
@@ -948,11 +997,17 @@ bool ElasticScroll::handleWheelEvent(not_null<QWheelEvent*> e, bool touch) {
 	if (phase == Qt::NoScrollPhase) {
 		if (_overscroll == currentOverscrollDefault()) {
 			const auto weak = base::make_weak(this);
+
 			requestBottomContent(delta);
 			if (!weak) {
 				return true;
 			}
-			tryScrollTo(_state.visibleFrom + delta);
+			if (AyuUiSettings::isSmoothScroll()) {
+				startSmoothWheel(delta);
+			} else {
+				tryScrollTo(_state.visibleFrom + delta);
+			}
+
 			_movement = Movement::None;
 		} else if (!_overscrollReturnAnimation.animating()) {
 			overscrollReturn();

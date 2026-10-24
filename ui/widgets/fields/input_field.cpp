@@ -14,6 +14,7 @@
 #include "ui/platform/ui_platform_utility.h"
 #include "emoji_suggestions_helper.h"
 #include "ui/text/text.h"
+#include "ayu/ayu_ui_settings.h"
 #include "ui/text/text_html_tags.h"
 #include "ui/basic_click_handlers.h"
 #include "ui/text/text_renderer.h" // kQuoteCollapsedLines
@@ -30,6 +31,8 @@
 #include "styles/palette.h"
 
 #include <QtCore/QtMath>
+#include <QtCore/QDateTime>
+#include <QtCore/QTimer>
 #include <QtCore/QMimeData>
 #include <QtCore/QRegularExpression>
 #include <QtGui/QClipboard>
@@ -1582,10 +1585,105 @@ const int InputField::kCustomEmojiLink = ::Ui::kCustomEmojiLink;
 const int InputField::kQuoteId = ::Ui::kQuoteId;
 const int InputField::kMisspelledProperty = ::Ui::kMisspelledProperty;
 
+// AyuGram: smooth caret overlay (dsh-claude-style caret motion)
+class CaretOverlay final : public QWidget {
+public:
+	CaretOverlay(QWidget *parent) : QWidget(parent) {
+		setAttribute(Qt::WA_TransparentForMouseEvents);
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override {
+		QPainter p(this);
+		p.setPen(Qt::NoPen);
+		p.setBrush(palette().color(QPalette::Text));
+		p.setOpacity(_blink ? 1.0 : 0.15);
+		p.drawRoundedRect(rect(), 1, 1);
+	}
+
+public:
+	void setBlink(bool on) {
+		if (_blink != on) {
+			_blink = on;
+			update();
+		}
+	}
+
+private:
+	bool _blink = true;
+};
 class InputField::Inner final : public QTextEdit {
 public:
 	Inner(not_null<InputField*> parent) : QTextEdit(parent) {
+		setCursorWidth(0); // the native caret is ours now
+		_caret = new CaretOverlay(viewport());
+		_caret->hide();
+		_caretTimer.setInterval(16);
+		connect(&_caretTimer, &QTimer::timeout, this, [this] { caretTick(); });
+		_caretTimer.start();
+		connect(this, &QTextEdit::cursorPositionChanged, this, [this] { caretMoved(); });
+		connect(this, &QTextEdit::textChanged, this, [this] { caretMoved(); });
 	}
+
+	void caretMoved() {
+		if (!AyuUiSettings::isSmoothCaret()) {
+			return;
+		}
+		_lastMove = QDateTime::currentMSecsSinceEpoch();
+		_caret->setBlink(true);
+	}
+
+	void caretTick() {
+		const auto feature = AyuUiSettings::isSmoothCaret();
+		if (!feature) {
+			if (cursorWidth() == 0) {
+				setCursorWidth(1);
+			}
+			if (_caret->isVisible()) {
+				_caret->hide();
+			}
+			_started = false;
+			return;
+		}
+		if (cursorWidth() != 0) {
+			setCursorWidth(0);
+		}
+		const auto active = hasFocus() && !textCursor().hasSelection();
+		if (!active) {
+			if (_caret->isVisible()) {
+				_caret->hide();
+			}
+			_started = false;
+			return;
+		}
+		if (!_caret->isVisible()) {
+			_caret->show();
+		}
+		const auto r = cursorRect();
+		const auto now = QDateTime::currentMSecsSinceEpoch();
+		if (now - _lastMove < 450) {
+			_caret->setBlink(true);
+		} else {
+			_caret->setBlink(((now - _lastMove) % 1000) < 500);
+		}
+		const auto target = double(r.x());
+		if (!_started || _caretX < 0) {
+			_caretX = target;
+			_started = true;
+		}
+		const auto dx = target - _caretX;
+		if (qAbs(dx) < 1.5) {
+			_caretX = target;
+		} else {
+			_caretX += dx * 0.5;
+		}
+		_caret->setGeometry(QRect(
+			int(_caretX),
+			r.y() + 1,
+			2,
+			int(r.height() * 1.15) - 2));
+	}
+
 
 protected:
 	bool viewportEvent(QEvent *e) override {
@@ -1635,8 +1733,11 @@ protected:
 	QMimeData *createMimeDataFromSelection() const override {
 		return outer()->createMimeDataFromSelectionInner();
 	}
-
-private:
+	private:
+	CaretOverlay *_caret = nullptr;
+	QTimer _caretTimer;
+	double _caretX = -1;
+	qint64 _lastMove = 0;
 	not_null<InputField*> outer() const {
 		return static_cast<InputField*>(parentWidget());
 	}

@@ -55,4 +55,23 @@ int getAvatarCorners() {
 	return avatarCorners;
 }
 
+bool smoothCaret = true;
+bool smoothScroll = true;
+
+void setSmoothCaret(bool val) {
+	smoothCaret = val;
+}
+
+bool isSmoothCaret() {
+	return smoothCaret;
+}
+
+void setSmoothScroll(bool val) {
+	smoothScroll = val;
+}
+
+bool isSmoothScroll() {
+	return smoothScroll;
+}
+
 }
