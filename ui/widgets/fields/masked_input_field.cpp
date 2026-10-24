@@ -5,6 +5,9 @@
 // https://github.com/desktop-app/legal/blob/master/LEGAL
 //
 #include "ui/widgets/fields/masked_input_field.h"
+#include <QtCore/QDateTime>
+#include <QtCore/QTimer>
+#include "ayu/ayu_ui_settings.h"
 
 #include "base/qt/qt_common_adapters.h"
 #include "ui/painter.h"
@@ -56,6 +59,118 @@ InputStyle *InputStyle::_instance = nullptr;
 
 } // namespace
 
+class AyuCaretOverlay final : public QWidget {
+public:
+	AyuCaretOverlay(QWidget *parent) : QWidget(parent) {
+		setAttribute(Qt::WA_TransparentForMouseEvents);
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override {
+		QPainter p(this);
+		p.setPen(Qt::NoPen);
+		p.setBrush(_color);
+		p.setOpacity(_blink ? 1.0 : 0.15);
+		p.drawRoundedRect(rect(), 1, 1);
+	}
+
+public:
+	void setBlink(bool on) {
+		if (_blink != on) {
+			_blink = on;
+			update();
+		}
+	}
+
+	void setColor(QColor color) {
+		if (_color != color) {
+			_color = color;
+			update();
+		}
+	}
+
+private:
+	QColor _color = Qt::transparent;
+	bool _blink = true;
+};
+
+void MaskedInputField::ayuCaretMoved() {
+	if (!AyuUiSettings::isSmoothCaret()) {
+		return;
+	}
+	_ayuLastMove = QDateTime::currentMSecsSinceEpoch();
+	if (_ayu) {
+		_ayu->setBlink(true);
+	}
+}
+
+void MaskedInputField::ayuCaretTick() {
+	const auto feature = AyuUiSettings::isSmoothCaret();
+	if (!feature) {
+		if (cursorWidth() == 0) {
+			setCursorWidth(1);
+		}
+		if (_ayu && _ayu->isVisible()) {
+			_ayu->hide();
+		}
+		_ayuStarted = false;
+		return;
+	}
+	if (cursorWidth() != 0) {
+		setCursorWidth(0);
+	}
+	const auto active = hasFocus() && !hasSelectedText();
+	if (!active) {
+		if (_ayu && _ayu->isVisible()) {
+			_ayu->hide();
+		}
+		_ayuStarted = false;
+		return;
+	}
+	if (!_ayu->isVisible()) {
+		_ayu->show();
+	}
+	const auto r = cursorRect();
+	const auto now = QDateTime::currentMSecsSinceEpoch();
+	if (AyuUiSettings::isCaretBlink()) {
+		if (now - _ayuLastMove < 450) {
+			_ayu->setBlink(true);
+		} else {
+			const auto half = AyuUiSettings::getBlinkMs();
+			_ayu->setBlink(((now - _ayuLastMove) % (half * 2)) < half);
+		}
+	} else {
+		_ayu->setBlink(true);
+	}
+	_ayu->setColor(AyuUiSettings::isCaretAccent()
+		? st::windowActiveTextFg->c
+		: palette().color(QPalette::Text));
+	const auto target = double(r.x());
+	if (!_ayuStarted || _ayuX < 0) {
+		_ayuX = target;
+		_ayuStarted = true;
+		_ayuLastTick = now;
+		return;
+	}
+	auto dt = double(now - _ayuLastTick);
+	_ayuLastTick = now;
+	if (dt <= 0) {
+		dt = 16.;
+	}
+	const auto tau = (100. - AyuUiSettings::getCaretSpeed()) * 2.;
+	const auto k = (tau > 0.) ? (1. - std::exp(-dt / tau)) : 1.;
+	const auto dx = target - _ayuX;
+	if (qAbs(dx) < 1.5) {
+		_ayuX = target;
+	} else {
+		_ayuX += dx * k;
+	}
+	_ayu->setGeometry(QRect(
+		int(_ayuX),
+		r.y() + (r.height() - int(r.height() * 1.15)) / 2,
+		2,
+		int(r.height() * 1.15)));
+}
 MaskedInputField::MaskedInputField(
 	QWidget *parent,
 	const style::InputField &st,
@@ -81,6 +196,16 @@ MaskedInputField::MaskedInputField(
 		updatePalette();
 	}, lifetime());
 	updatePalette();
+
+	setCursorWidth(0); // AyuGram: the native caret is ours now
+	_ayu = new AyuCaretOverlay(this);
+	_ayu->hide();
+	_ayuTimer = new QTimer(this);
+	_ayuTimer->setInterval(16);
+	connect(_ayuTimer, &QTimer::timeout, this, [this] { ayuCaretTick(); });
+	_ayuTimer->start();
+	connect(this, &QLineEdit::cursorPositionChanged, this, [this] { ayuCaretMoved(); });
+	connect(this, &QLineEdit::textChanged, this, [this] { ayuCaretMoved(); });
 
 	if (_st.textBg->c.alphaF() >= 1. && !_st.borderRadius) {
 		setAttribute(Qt::WA_OpaquePaintEvent);

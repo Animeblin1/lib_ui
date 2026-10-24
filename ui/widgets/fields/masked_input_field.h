@@ -20,6 +20,9 @@ namespace Ui {
 
 class PopupMenu;
 
+class QTimer;
+class AyuCaretOverlay;
+
 class MaskedInputField : public RpWidgetBase<QLineEdit> {
 	Q_OBJECT
 
@@ -127,6 +130,16 @@ private:
 
 	bool _undoAvailable = false;
 	bool _redoAvailable = false;
+
+	AyuCaretOverlay *_ayu = nullptr;
+	QTimer *_ayuTimer = nullptr;
+	double _ayuX = -1;
+	qint64 _ayuLastMove = 0;
+	qint64 _ayuLastTick = 0;
+	bool _ayuStarted = false;
+
+	void ayuCaretMoved();
+	void ayuCaretTick();
 
 	bool _customUpDown = false;
 
