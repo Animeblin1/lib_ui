@@ -669,24 +669,20 @@ bool ScrollArea::viewportEvent(QEvent *e) {
 }
 
 void ScrollArea::startSmoothWheel(double delta) {
-	// Ayu: Telegram-like momentum. Wheel events are *added* to the pending
-	// journey (nothing is ever dropped), and the ease restarts from the
-	// current position with a duration proportional to the remaining
-	// distance: a fast spin keeps its full velocity while a single notch
-	// stays a short, soft glide.
+	// Ayu: exponential follower. All wheel deltas are accumulated into the
+	// target (nothing is ever dropped) and the position chases it with a
+	// constant time constant, so sustained scrolling speed always matches
+	// the wheel speed - no restarts, no easing pulses, and the natural
+	// decaying tail after the last event reads as momentum.
 	const auto now = crl::now();
-	_smoothFrom = _smoothActive
-		? _smoothCurrent
-		: verticalScrollBar()->value();
-	_smoothTarget = (_smoothActive ? _smoothTarget : _smoothFrom) + delta;
-	_smoothStart = now;
+	if (!_smoothActive) {
+		_smoothCurrent = verticalScrollBar()->value();
+		_smoothTarget = _smoothCurrent;
+		_smoothActive = true;
+		_smoothWheelTimer.callEach(16);
+	}
+	_smoothTarget += delta;
 	_smoothLast = now;
-	_smoothActive = true;
-	const auto base = 40.
-		+ (100. - AyuUiSettings::getScrollSmoothSpeed()) * 1.8; // 40..220
-	const auto dist = std::abs(_smoothTarget - _smoothFrom);
-	_smoothDur = std::clamp(base + dist / 8., 50., 700.);
-	_smoothWheelTimer.callEach(16);
 }
 
 void ScrollArea::smoothWheelTick() {
@@ -695,25 +691,26 @@ void ScrollArea::smoothWheelTick() {
 		return;
 	}
 	const auto now = crl::now();
-	const auto dur = _smoothDur;
-	const auto t = double(now - _smoothStart);
-	if (t >= dur) {
+	const auto dt = std::clamp(double(now - _smoothLast), 1., 100.);
+	_smoothLast = now;
+	const auto tau = 30.
+		+ (100. - AyuUiSettings::getScrollSmoothSpeed()) * 1.1; // 30..140
+	_smoothCurrent += (_smoothTarget - _smoothCurrent)
+		* (1. - std::exp(-dt / tau));
+	if (std::abs(_smoothTarget - _smoothCurrent) < 0.75) {
 		verticalScrollBar()->setValue(int(std::lround(_smoothTarget)));
 		_smoothCurrent = _smoothTarget;
-		_smoothFrom = _smoothTarget;
+		_smoothTarget = 0;
 		_smoothActive = false;
 		_smoothWheelTimer.cancel();
 		return;
 	}
-	const auto p = 1. - std::pow(1. - (t / dur), 3.);
-	_smoothCurrent = _smoothFrom + (_smoothTarget - _smoothFrom) * p;
 	verticalScrollBar()->setValue(int(std::lround(_smoothCurrent)));
 	if (verticalScrollBar()->value() == int(std::lround(_smoothCurrent))) {
 		// If the range clamps us, settle at the real edge early.
 		if (_smoothCurrent >= verticalScrollBar()->maximum()
 			|| _smoothCurrent <= verticalScrollBar()->minimum()) {
 			_smoothCurrent = verticalScrollBar()->value();
-			_smoothFrom = _smoothCurrent;
 			_smoothTarget = _smoothCurrent;
 			_smoothActive = false;
 			_smoothWheelTimer.cancel();

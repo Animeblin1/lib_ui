@@ -277,10 +277,7 @@ private:
 	base::Timer _smoothWheelTimer;
 	double _smoothCurrent = 0;
 	double _smoothTarget = 0;
-	double _smoothFrom = 0;
-	crl::time _smoothStart = 0;
 	crl::time _smoothLast = 0;
-	crl::time _smoothDur = 0;
 	bool _smoothActive = false;
 
 	object_ptr<QWidget> _widget = { nullptr };
