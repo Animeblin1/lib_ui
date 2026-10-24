@@ -5,6 +5,7 @@
 // https://github.com/desktop-app/legal/blob/master/LEGAL
 //
 #include "ui/widgets/fields/masked_input_field.h"
+#include <algorithm>
 #include <cmath>
 #include <QtCore/QDateTime>
 #include <QtCore/QTimer>
@@ -177,7 +178,14 @@ void MaskedInputField::ayuCaretTick() {
 		_ayuAnimTo = target;
 		_ayuAnimStart = now;
 	}
-	const auto dur = 320. - (2.6 * AyuUiSettings::getCaretSpeed());
+	// Claude-like pacing: the duration scales with the distance, so
+	// typing keeps the caret ~1 character behind at most, while big
+	// jumps (Home/End) glide up to the slider-defined maximum.
+	const auto sliderMax = 320. - (2.6 * AyuUiSettings::getCaretSpeed());
+	const auto dur = std::clamp(
+		std::abs(_ayuAnimTo - _ayuAnimFrom) * 18.,
+		40.,
+		std::max(sliderMax, 40.));
 	const auto t = double(now - _ayuAnimStart);
 	if (t >= dur) {
 		_ayuX = _ayuAnimTo;
