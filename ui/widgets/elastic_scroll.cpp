@@ -557,8 +557,8 @@ void ElasticScroll::startSmoothWheel(double delta) {
 	// constant time constant, so sustained scrolling speed always matches
 	// the wheel speed - no restarts, no easing pulses, and the natural
 	// decaying tail after the last event reads as momentum.
-	const auto now = crl::now();
 	if (!_smoothActive) {
+		_smoothLast = crl::now();
 		_smoothCurrent = _state.visibleFrom;
 		_smoothTarget = _smoothCurrent;
 		_smoothActive = true;
@@ -566,7 +566,6 @@ void ElasticScroll::startSmoothWheel(double delta) {
 	}
 	_smoothTarget += delta
 		* (AyuUiSettings::getWheelScrollStep() / 100.);
-	_smoothLast = now;
 	_smoothStall = 0;
 }
 
@@ -591,7 +590,7 @@ void ElasticScroll::smoothWheelTick() {
 		return;
 	}
 	tryScrollTo(int(std::lround(_smoothCurrent)));
-	if (_state.visibleFrom == int(std::lround(_smoothCurrent))) {
+	if (_state.visibleFrom != int(std::lround(_smoothCurrent))) {
 		if (++_smoothStall > 3) {
 			// Clamped by the scroll range: settle at the real edge.
 			_smoothCurrent = _state.visibleFrom;

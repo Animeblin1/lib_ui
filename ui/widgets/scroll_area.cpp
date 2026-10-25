@@ -674,8 +674,8 @@ void ScrollArea::startSmoothWheel(double delta) {
 	// constant time constant, so sustained scrolling speed always matches
 	// the wheel speed - no restarts, no easing pulses, and the natural
 	// decaying tail after the last event reads as momentum.
-	const auto now = crl::now();
 	if (!_smoothActive) {
+		_smoothLast = crl::now();
 		_smoothCurrent = verticalScrollBar()->value();
 		_smoothTarget = _smoothCurrent;
 		_smoothActive = true;
@@ -683,7 +683,6 @@ void ScrollArea::startSmoothWheel(double delta) {
 	}
 	_smoothTarget += delta
 		* (AyuUiSettings::getWheelScrollStep() / 100.);
-	_smoothLast = now;
 }
 
 void ScrollArea::smoothWheelTick() {
@@ -707,7 +706,7 @@ void ScrollArea::smoothWheelTick() {
 		return;
 	}
 	verticalScrollBar()->setValue(int(std::lround(_smoothCurrent)));
-	if (verticalScrollBar()->value() == int(std::lround(_smoothCurrent))) {
+	if (verticalScrollBar()->value() != int(std::lround(_smoothCurrent))) {
 		// If the range clamps us, settle at the real edge early.
 		if (_smoothCurrent >= verticalScrollBar()->maximum()
 			|| _smoothCurrent <= verticalScrollBar()->minimum()) {

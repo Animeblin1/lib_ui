@@ -31,7 +31,9 @@ void DraggingScrollManager::checkDeltaScroll(int delta) {
 		if (!_timer) {
 			_timer = std::make_unique<base::Timer>([=] { scrollByTimer(); });
 		}
-		_timer->callEach(15);
+		if (!_timer->isActive()) {
+			_timer->callEach(15);
+		}
 	} else {
 		cancel();
 	}
