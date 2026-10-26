@@ -976,6 +976,8 @@ void ScrollArea::scrollToX(int toLeft, int toRight) {
 }
 
 void ScrollArea::scrollToY(int toTop, int toBottom) {
+	_smoothActive = false;
+	_smoothWheelTimer.cancel();
 	verticalScrollBar()->setValue(computeScrollToY(toTop, toBottom));
 }
 

@@ -1719,6 +1719,8 @@ int ElasticScroll::computeScrollToY(int toTop, int toBottom) {
 }
 
 void ElasticScroll::scrollTo(int toFrom, int toTill) {
+	_smoothActive = false;
+	_smoothWheelTimer.cancel();
 	if (const auto inner = _widget.data()) {
 		SendPendingMoveResizeEvents(inner);
 	}
