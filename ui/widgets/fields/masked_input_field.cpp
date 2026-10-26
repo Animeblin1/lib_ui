@@ -32,6 +32,16 @@ public:
 		setParent(QCoreApplication::instance());
 	}
 
+	int pixelMetric(
+			PixelMetric metric,
+			const QStyleOption *option = nullptr,
+			const QWidget *widget = nullptr) const override {
+		if (metric == PM_TextCursorWidth && AyuUiSettings::isSmoothCaret()) {
+			return 0;
+		}
+		return QCommonStyle::pixelMetric(metric, option, widget);
+	}
+
 	void drawPrimitive(
 		PrimitiveElement element,
 		const QStyleOption *option,
@@ -59,23 +69,6 @@ private:
 };
 
 InputStyle *InputStyle::_instance = nullptr;
-
-// AyuGram: QLineEdit takes the native caret width from the style on every
-// paint, so the only reliable way to hide it is a per-widget style reporting
-// no cursor width while the smooth caret setting is on.
-class AyuLineEditStyle final : public QProxyStyle {
-public:
-	int pixelMetric(
-			PixelMetric metric,
-			const QStyleOption *option = nullptr,
-			const QWidget *widget = nullptr) const override {
-		if (metric == PM_TextCursorWidth && AyuUiSettings::isSmoothCaret()) {
-			return 0;
-		}
-		return QProxyStyle::pixelMetric(metric, option, widget);
-	}
-
-};
 
 } // namespace
 
@@ -225,7 +218,7 @@ MaskedInputField::MaskedInputField(
 	}, lifetime());
 	updatePalette();
 
-	setStyle(new AyuLineEditStyle()); // AyuGram: the native caret is ours now
+	setStyle(InputStyle::instance());
 	_ayu = new AyuCaretOverlay(this);
 	_ayu->hide();
 	_ayuTimer = new QTimer(this);
