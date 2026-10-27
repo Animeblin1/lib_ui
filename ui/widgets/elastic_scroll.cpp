@@ -1004,6 +1004,12 @@ bool ElasticScroll::handleWheelEvent(not_null<QWheelEvent*> e, bool touch) {
 		delta = 0;
 	}
 	if (phase == Qt::NoScrollPhase) {
+		if (!AyuUiSettings::isSmoothScroll() && !touch
+			&& e->pixelDelta().isNull()
+			&& e->device()->type() == QInputDevice::DeviceType::Mouse) {
+			delta = int(std::lround(
+				delta * (AyuUiSettings::getWheelScrollStep() / 100.)));
+		}
 		if (_overscroll == currentOverscrollDefault()) {
 			const auto weak = base::make_weak(this);
 

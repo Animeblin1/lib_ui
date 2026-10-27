@@ -664,6 +664,21 @@ bool ScrollArea::viewportEvent(QEvent *e) {
 				return true;
 			}
 		}
+		if (!AyuUiSettings::isSmoothScroll()
+			&& ev->phase() == Qt::NoScrollPhase
+			&& ev->pixelDelta().isNull()
+			&& ev->device()->type() == QInputDevice::DeviceType::Mouse
+			&& AyuUiSettings::getWheelScrollStep() != 100) {
+			auto scaled = QWheelEvent(
+				ev->position(), ev->globalPosition(), ev->pixelDelta(),
+				(ev->angleDelta() * AyuUiSettings::getWheelScrollStep()) / 100,
+				ev->buttons(), ev->modifiers(), ev->phase(), ev->inverted(),
+				ev->source(), ev->device());
+			scaled.setTimestamp(ev->timestamp());
+			const auto result = QScrollArea::viewportEvent(&scaled);
+			ev->setAccepted(scaled.isAccepted());
+			return result;
+		}
 	}
 	return QScrollArea::viewportEvent(e);
 }
