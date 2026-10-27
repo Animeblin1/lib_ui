@@ -673,7 +673,7 @@ bool ScrollArea::viewportEvent(QEvent *e) {
 				ev->position(), ev->globalPosition(), ev->pixelDelta(),
 				(ev->angleDelta() * AyuUiSettings::getWheelScrollStep()) / 100,
 				ev->buttons(), ev->modifiers(), ev->phase(), ev->inverted(),
-				ev->source(), ev->device());
+				ev->source(), ev->pointingDevice());
 			scaled.setTimestamp(ev->timestamp());
 			const auto result = QScrollArea::viewportEvent(&scaled);
 			ev->setAccepted(scaled.isAccepted());
