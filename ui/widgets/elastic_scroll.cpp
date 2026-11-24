@@ -7,6 +7,7 @@
 #include "ui/widgets/elastic_scroll.h"
 #include "ayu/ayu_ui_settings.h"
 
+#include "ui/widgets/scroll_math.h"
 #include "ui/painter.h"
 #include "ui/ui_utility.h"
 #include "base/qt/qt_common_adapters.h"
@@ -20,43 +21,6 @@
 
 namespace Ui {
 namespace {
-
-[[nodiscard]] int ComputeScrollTo(
-		int toFrom,
-		int toTill,
-		int toMin,
-		int toMax,
-		int current,
-		int size) {
-	if (toFrom < toMin) {
-		toFrom = toMin;
-	} else if (toFrom > toMax) {
-		toFrom = toMax;
-	}
-	const auto exact = (toTill < 0);
-
-	const auto curBottom = current + size;
-	auto scToFrom = toFrom;
-	if (!exact && toFrom >= current) {
-		if (toTill < toFrom) {
-			toTill = toFrom;
-		}
-		if (toTill <= curBottom) {
-			return current;
-		}
-
-		scToFrom = toTill - size;
-		if (scToFrom > toFrom) {
-			scToFrom = toFrom;
-		}
-		if (scToFrom == current) {
-			return current;
-		}
-	} else {
-		scToFrom = toFrom;
-	}
-	return scToFrom;
-}
 
 constexpr auto kOverscrollFromThreshold = -(1 << 30);
 constexpr auto kOverscrollTillThreshold = (1 << 30);
@@ -939,15 +903,21 @@ void ElasticScroll::paintEvent(QPaintEvent *e) {
 	}
 }
 
-bool ElasticScroll::handleWheelEvent(not_null<QWheelEvent*> e, bool touch) {
+bool ElasticScroll::handleWheelEvent(
+		not_null<QWheelEvent*> e,
+		WheelSource source) {
 	if (_customWheelProcess
 		&& _customWheelProcess(static_cast<QWheelEvent*>(e.get()))) {
 		return true;
 	}
+	const auto touch = (source != WheelSource::Wheel);
+	const auto exact = (source == WheelSource::ExactTouch);
 	const auto phase = e->phase();
 	auto ownAxisLocked = false;
 	if (_wheelDirectionLocked || _crossAxisWheelProcess) {
-		const auto lockDelta = ScrollDeltaF(e, touch);
+		const auto lockDelta = exact
+			? QPointF(e->pixelDelta())
+			: ScrollDeltaF(e, touch);
 		const auto locked = _wheelDirectionLocked
 			? _wheelDirectionLock.update(phase, lockDelta)
 			: std::nullopt;
@@ -981,7 +951,7 @@ bool ElasticScroll::handleWheelEvent(not_null<QWheelEvent*> e, bool touch) {
 	const auto guard = gsl::finally([&] {
 		_lastScroll = now;
 	});
-	auto unmultiplied = ScrollDelta(e, touch);
+	auto unmultiplied = exact ? e->pixelDelta() : ScrollDelta(e, touch);
 	if (ownAxisLocked) {
 		if (_vertical) {
 			unmultiplied.setX(0);
@@ -1396,6 +1366,55 @@ void ElasticScroll::touchScrollUpdated() {
 	touchUpdateSpeed();
 }
 
+bool ElasticScroll::touchScrollBy(QPoint delta, bool pressed) {
+	// The core takes opposite momentum in a spring for a lost begin.
+	if (_disabled
+		|| (!pressed && (!_touchOwnerGesture || _overscrollReturning))) {
+		return false;
+	}
+	const auto was = position();
+	const auto weak = base::make_weak(this);
+	if (pressed && !_touchOwnerGesture) {
+		_touchOwnerGesture = true;
+		sendWheelEvent(Qt::ScrollBegin, {}, WheelSource::ExactTouch);
+		if (!weak) {
+			return false;
+		}
+	}
+	sendWheelEvent(
+		pressed ? Qt::ScrollUpdate : Qt::ScrollMomentum,
+		delta,
+		WheelSource::ExactTouch);
+	return weak && (position() != was);
+}
+
+void ElasticScroll::touchScrollRelease() {
+	if (_touchOwnerGesture) {
+		sendWheelEvent(Qt::ScrollMomentum, {}, WheelSource::ExactTouch);
+	}
+}
+
+void ElasticScroll::touchScrollFinish(bool cancelled) {
+	if (!_touchOwnerGesture) {
+		return;
+	}
+	_touchOwnerGesture = false;
+	const auto stretch = _overscroll - currentOverscrollDefault();
+	if (cancelled && stretch && !_overscrollReturning) {
+		// WHY: unwinding the held stretch while still in Progress drops
+		// the pull before the terminal phase, so a cancel never commits.
+		const auto weak = base::make_weak(this);
+		sendWheelEvent(
+			Qt::ScrollUpdate,
+			_vertical ? QPoint(0, stretch) : QPoint(stretch, 0),
+			WheelSource::ExactTouch);
+		if (!weak) {
+			return;
+		}
+	}
+	sendWheelEvent(Qt::ScrollEnd, {}, WheelSource::ExactTouch);
+}
+
 void ElasticScroll::disableScroll(bool dis) {
 	_disabled = dis;
 	if (_disabled && _st.hiding) {
@@ -1574,7 +1593,10 @@ void ElasticScroll::tryScrollTo(int position, bool synthMouseMove) {
 	applyScrollTo(willScrollTo(position), synthMouseMove);
 }
 
-void ElasticScroll::sendWheelEvent(Qt::ScrollPhase phase, QPoint delta) {
+void ElasticScroll::sendWheelEvent(
+		Qt::ScrollPhase phase,
+		QPoint delta,
+		WheelSource source) {
 	auto e = QWheelEvent(
 		mapFromGlobal(_touchPosition),
 		_touchPosition,
@@ -1585,7 +1607,7 @@ void ElasticScroll::sendWheelEvent(Qt::ScrollPhase phase, QPoint delta) {
 		phase,
 		false,
 		Qt::MouseEventSynthesizedByApplication);
-	handleWheelEvent(&e, true);
+	handleWheelEvent(&e, source);
 }
 
 void ElasticScroll::setBarTopInset(int inset) {
@@ -1762,6 +1784,7 @@ void ElasticScroll::scrollTo(int toFrom, int toTill) {
 }
 
 void ElasticScroll::doSetOwnedWidget(object_ptr<QWidget> w) {
+	_touchOwnerGesture = false;
 	constexpr auto attribute = Qt::WA_AcceptTouchEvents;
 	if (_widget) {
 		_widget->removeEventFilter(this);
@@ -1911,6 +1934,50 @@ void ElasticScroll::clearOverscroll() {
 
 void ElasticScroll::returnToOverscrollDefaults() {
 	overscrollReturn();
+}
+
+void ElasticScroll::absorbBottomOverscroll(int position) {
+	const auto absorbable = [&] {
+		return !_disabled
+			&& _widget
+			&& (_overscroll > 0)
+			&& (_overscrollTypeTill == OverscrollType::Real)
+			&& !_overscrollDefaultTill
+			&& !overscrollPullSide(1);
+	};
+	if (!absorbable()) {
+		return;
+	}
+	const auto weak = base::make_weak(this);
+	SendPendingMoveResizeEvents(_widget.data());
+	if (!weak) {
+		return;
+	}
+	SendPendingMoveResizeEvents(this);
+	if (!weak || !absorbable()) {
+		return;
+	}
+	const auto edge = lookupOverscrollPinnedEdge();
+	const auto remaining = edge ? (position - *edge) : -1;
+	if (remaining < 0 || remaining >= _overscroll) {
+		return;
+	}
+	const auto returning = _overscrollReturning
+		&& (_springSide > 0)
+		&& _overscrollReturnAnimation.animating();
+	if (returning) {
+		if (!remaining) {
+			overscrollSpringFinish();
+			return;
+		}
+		// The spring is linear in (x0, v0): scaled, it keeps its clock.
+		const auto ratio = float64(remaining) / _overscroll;
+		_springX0 *= ratio;
+		_springV0 *= ratio;
+	}
+	_overscrollAccumulated = currentOverscrollDefaultAccumulated()
+		+ overscrollToAccumulated(1, remaining);
+	applyOverscroll(remaining);
 }
 
 void ElasticScroll::setOverscrollBg(QColor bg) {

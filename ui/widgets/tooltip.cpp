@@ -140,7 +140,7 @@ void Tooltip::popup(const QPoint &m, const QString &text, const style::Tooltip *
 
 	const auto screen = QGuiApplication::screenAt(m);
 	if (screen) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0) && !defined(Q_OS_MAC)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0) && !defined(Q_OS_MACOS)
 		setScreen(screen);
 #else // Qt >= 6.0.0
 		createWinId();
@@ -499,6 +499,8 @@ object_ptr<FlatLabel> MakeNiceTooltipLabel(
 		const auto desired = raw->textMaxWidth();
 		if (desired <= maxWidth) {
 			raw->resizeToWidth(desired);
+			// An unchanged natural width won't resize a hidden wrap.
+			SendPendingMoveResizeEvents(raw);
 			return;
 		}
 		raw->resizeToWidth(maxWidth);
@@ -510,6 +512,7 @@ object_ptr<FlatLabel> MakeNiceTooltipLabel(
 				return raw->heightNoMargins();
 			});
 		raw->resizeToWidth(niceWidth);
+		raw->setNaturalWidth(niceWidth);
 	}, raw->lifetime());
 	return result;
 }
